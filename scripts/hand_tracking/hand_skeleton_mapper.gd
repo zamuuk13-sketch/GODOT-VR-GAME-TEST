@@ -1,15 +1,18 @@
 class_name HandSkeletonMapper
 extends Node
 
-const LANDMARK_COUNT := 21
+## Procedural retargeting for the exact handvr.glb rig.
+## No prerecorded hand animations are used.
 
-# MediaPipe landmark indices:
-# 0 wrist
-# 1-4 thumb
-# 5-8 index
-# 9-12 middle
-# 13-16 ring
-# 17-20 pinky
+const BONE_NAMES := {
+	"hand": "hand_R_00",
+	"thumb": ["thumb01_R_01", "thumb02_R_02", "thumb03_R_03"],
+	"index": ["index00_R_04", "index01_R_05", "index02_R_06", "index03_R_07"],
+	"middle": ["middle00_R_08", "middle01_R_09", "middle02_R_010", "middle03_R_011"],
+	"ring": ["ring00_R_012", "ring01_R_013", "ring02_R_014", "ring03_R_015"],
+	"pinky": ["pinky00_R_016", "pinky01_R_017", "pinky02_R_018", "pinky03_R_019"]
+}
+
 const SEGMENTS := {
 	"thumb": [[1, 2], [2, 3], [3, 4]],
 	"index": [[5, 6], [6, 7], [7, 8]],
@@ -19,123 +22,86 @@ const SEGMENTS := {
 }
 
 var skeleton: Skeleton3D
-var bone_targets: Dictionary = {}
 var smoothing := 24.0
 var override_amount := 1.0
+var _bone_map: Dictionary = {}
+var _rest_dirs: Dictionary = {}
 
 func setup(target_skeleton: Skeleton3D) -> void:
 	skeleton = target_skeleton
-	bone_targets.clear()
-	_discover_bones()
-
-func _discover_bones() -> void:
+	_bone_map.clear()
+	_rest_dirs.clear()
 	if not skeleton:
 		return
+	for group_name in BONE_NAMES:
+		var names = BONE_NAMES[group_name]
+		if names is Array:
+			for bone_name in names:
+				_register_bone(str(bone_name))
+		else:
+			_register_bone(str(names))
 
-	for i in skeleton.get_bone_count():
-		var bone_name := skeleton.get_bone_name(i).to_lower()
-		var key := _classify_bone(bone_name)
-		if key != "":
-			bone_targets[i] = key
+func _register_bone(bone_name: String) -> void:
+	var index := skeleton.find_bone(bone_name)
+	if index < 0:
+		push_warning("handvr.glb bone not found: " + bone_name)
+		return
+	_bone_map[bone_name] = index
+	_rest_dirs[index] = _rest_bone_direction(index)
 
-func _classify_bone(name: String) -> String:
-	var n := name.replace("-", "_").replace(".", "_")
-
-	if "wrist" in n or "hand" in n or "palm" in n:
-		return "wrist"
-
-	var finger := ""
-	if "thumb" in n:
-		finger = "thumb"
-	elif "index" in n or "pointer" in n:
-		finger = "index"
-	elif "middle" in n:
-		finger = "middle"
-	elif "ring" in n:
-		finger = "ring"
-	elif "pinky" in n or "little" in n:
-		finger = "pinky"
-
-	if finger == "":
-		return ""
-
-	var level := 0
-	if "prox" in n or "mcp" in n or "_1" in n or n.ends_with("1"):
-		level = 0
-	elif "inter" in n or "pip" in n or "_2" in n or n.ends_with("2"):
-		level = 1
-	elif "dist" in n or "dip" in n or "_3" in n or n.ends_with("3"):
-		level = 2
-	elif "_4" in n or n.ends_with("4") or "tip" in n:
-		level = 2
-	else:
-		level = 0
-
-	return "%s_%d" % [finger, level]
-
-func apply_landmarks(landmarks: Array, delta: float) -> void:
-	if not skeleton or landmarks.size() < LANDMARK_COUNT:
+func apply_tracking_skeleton(tracking: TrackingHandSkeleton, delta: float) -> void:
+	if not skeleton or not tracking or not tracking.valid:
 		return
 
 	var weight := 1.0 - exp(-smoothing * delta)
+	_apply_palm_pose(tracking, weight)
 
-	# Rotate each finger bone so its long axis follows the corresponding
-	# MediaPipe landmark segment.
-	for bone_idx in bone_targets:
-		var target_name: String = bone_targets[bone_idx]
-		if target_name == "wrist":
-			continue
+	for finger in SEGMENTS:
+		var names: Array = BONE_NAMES[finger]
+		var pairs: Array = SEGMENTS[finger]
+		for level in pairs.size():
+			var bone_name := str(names[level])
+			if not _bone_map.has(bone_name):
+				continue
+			var pair: Array = pairs[level]
+			var world_direction := tracking.get_segment_direction(pair[0], pair[1])
+			if world_direction.length_squared() < 0.0001:
+				continue
+			var local_direction := skeleton.global_transform.basis.inverse() * world_direction
+			_apply_direction(int(_bone_map[bone_name]), local_direction, weight)
 
-		var parts := target_name.split("_")
-		if parts.size() != 2:
-			continue
+func _apply_palm_pose(tracking: TrackingHandSkeleton, weight: float) -> void:
+	var name := str(BONE_NAMES["hand"])
+	if not _bone_map.has(name):
+		return
+	var bone_idx := int(_bone_map[name])
+	var rest_pose := skeleton.get_bone_global_rest(bone_idx)
+	var target_basis := skeleton.global_transform.basis.inverse() * tracking.get_palm_basis()
+	if target_basis == Basis.IDENTITY:
+		return
+	target_basis = target_basis.orthonormalized()
+	var rest_basis := rest_pose.basis.orthonormalized()
+	var delta_rotation := target_basis.get_rotation_quaternion() * rest_basis.get_rotation_quaternion().inverse()
+	var desired := Transform3D(Basis(delta_rotation) * rest_pose.basis, skeleton.get_bone_global_pose(bone_idx).origin)
+	var blended := skeleton.get_bone_global_pose(bone_idx).interpolate_with(desired, weight)
+	skeleton.set_bone_global_pose_override(bone_idx, blended, override_amount, false)
 
-		var finger: String = parts[0]
-		var level := int(parts[1])
-		if not SEGMENTS.has(finger):
-			continue
+func _apply_direction(bone_idx: int, target_direction: Vector3, weight: float) -> void:
+	var rest_direction: Vector3 = _rest_dirs.get(bone_idx, Vector3.ZERO)
+	if target_direction.length_squared() < 0.0001 or rest_direction.length_squared() < 0.0001:
+		return
+	var delta_rotation := Quaternion(rest_direction.normalized(), target_direction.normalized())
+	var rest_pose := skeleton.get_bone_global_rest(bone_idx)
+	var desired := Transform3D(Basis(delta_rotation) * rest_pose.basis, skeleton.get_bone_global_pose(bone_idx).origin)
+	var blended := skeleton.get_bone_global_pose(bone_idx).interpolate_with(desired, weight)
+	skeleton.set_bone_global_pose_override(bone_idx, blended, override_amount, false)
 
-		var pair: Array = SEGMENTS[finger][level]
-		var a := _landmark_vector(landmarks[pair[0]])
-		var b := _landmark_vector(landmarks[pair[1]])
-		var target_dir := (b - a).normalized()
-		if target_dir.length_squared() < 0.0001:
-			continue
-
-		var rest_pose := skeleton.get_bone_global_rest(bone_idx)
-		var rest_dir := _rest_bone_direction(bone_idx, rest_pose)
-		if rest_dir.length_squared() < 0.0001:
-			continue
-
-		var delta_rotation := Quaternion(rest_dir, target_dir)
-		var desired_basis := Basis(delta_rotation) * rest_pose.basis
-		var current_pose := skeleton.get_bone_global_pose(bone_idx)
-		var desired := Transform3D(desired_basis, current_pose.origin)
-		var blended := current_pose.interpolate_with(desired, weight)
-
-		skeleton.set_bone_global_pose_override(
-			bone_idx,
-			blended,
-			override_amount,
-			false
-		)
-
-func _rest_bone_direction(bone_idx: int, rest_pose: Transform3D) -> Vector3:
+func _rest_bone_direction(bone_idx: int) -> Vector3:
+	var rest_pose := skeleton.get_bone_global_rest(bone_idx)
 	var children := skeleton.get_bone_children(bone_idx)
-	if children.is_empty():
-		var parent := skeleton.get_bone_parent(bone_idx)
-		if parent >= 0:
-			return (rest_pose.origin - skeleton.get_bone_global_rest(parent).origin).normalized()
-		return Vector3.FORWARD
-
-	var child_rest := skeleton.get_bone_global_rest(children[0])
-	return (child_rest.origin - rest_pose.origin).normalized()
-
-func _landmark_vector(value: Variant) -> Vector3:
-	if value is Dictionary:
-		return Vector3(
-			float(value.get("x", 0.0)),
-			float(value.get("y", 0.0)),
-			float(value.get("z", 0.0))
-		)
-	return Vector3.ZERO
+	if not children.is_empty():
+		return (skeleton.get_bone_global_rest(children[0]).origin - rest_pose.origin).normalized()
+	var parent := skeleton.get_bone_parent(bone_idx)
+	if parent >= 0:
+		return (rest_pose.origin - skeleton.get_bone_global_rest(parent).origin).normalized()
+	return Vector3.UP
