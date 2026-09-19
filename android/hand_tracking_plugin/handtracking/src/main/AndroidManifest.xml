@@ -2,7 +2,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application>
-        <activity android:name="com.zamuuk.godot.handtracking.HandTrackingActivity"
-            android:exported="false" />
+        <meta-data
+            android:name="org.godotengine.plugin.v2.BananoHandTracking"
+            android:value="com.zamuuk.godot.handtracking.HandTrackingPlugin" />
     </application>
 </manifest>
