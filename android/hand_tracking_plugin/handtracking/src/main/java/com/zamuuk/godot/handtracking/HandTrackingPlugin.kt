@@ -15,13 +15,35 @@ class HandTrackingPlugin(godot: Godot?) : GodotPlugin(godot) {
 
     override fun getPluginName(): String = "BananoHandTracking"
 
+    private fun activityOrNull(): Activity? = getActivity()
+
+    @UsedByGodot
+    fun isCameraPermissionGranted(): Boolean {
+        val activity = activityOrNull() ?: return false
+        return ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    }
+
+    @UsedByGodot
+    fun requestCameraPermission(): Boolean {
+        val activity = activityOrNull() ?: return false
+        if (isCameraPermissionGranted()) return true
+        ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.CAMERA), 7001)
+        lastError = "CAMERA_PERMISSION_REQUESTED"
+        return false
+    }
+
     @UsedByGodot
     fun startTracking(): Boolean {
-        val activity: Activity = getActivity() ?: return false
-        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.CAMERA), 7001)
+        val activity = activityOrNull() ?: run {
+            lastError = "GODOT_ACTIVITY_UNAVAILABLE"
             return false
         }
+
+        if (!isCameraPermissionGranted()) {
+            requestCameraPermission()
+            return false
+        }
+
         lastError = ""
         return tracker.start(activity)
     }
