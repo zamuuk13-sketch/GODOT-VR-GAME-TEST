@@ -33,5 +33,6 @@ class AndroidExportPlugin extends EditorExportPlugin:
 			"androidx.camera:camera-camera2:1.4.2",
 			"androidx.camera:camera-lifecycle:1.4.2",
 			"androidx.camera:camera-core:1.4.2",
-			"androidx.core:core-ktx:1.15.0"
+			"androidx.core:core-ktx:1.15.0",
+			"androidx.lifecycle:lifecycle-process:2.8.7"
 		])
