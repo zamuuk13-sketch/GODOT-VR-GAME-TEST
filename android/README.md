@@ -32,3 +32,21 @@ Antes de avançar para a etapa de mão virtual, conferir res://modelos/ e exigir
 
 - casa.glb
 - handvr.glb
+
+
+## Etapa 4 — Mão 3D
+
+A mão virtual usa `res://modelos/handvr.glb`.
+
+O sistema:
+- instancia uma mão para cada lado detectado;
+- procura automaticamente um `Skeleton3D` dentro do GLB;
+- associa os dedos aos 21 landmarks do MediaPipe;
+- aplica a direção dos segmentos aos ossos;
+- suaviza posição e rotação;
+- espelha a mão direita;
+- mantém a mão posicionada no espaço relativo à câmera VR.
+
+O mapeamento suporta nomes comuns de ossos como wrist/palm/hand, thumb, index/pointer, middle, ring e pinky/little, com níveis proximal/intermediate/distal ou sufixos numéricos.
+
+A etapa depende de `handvr.glb` ter um `Skeleton3D` com ossos dos dedos. O sistema não cria um esqueleto artificial nem altera a malha do modelo.
