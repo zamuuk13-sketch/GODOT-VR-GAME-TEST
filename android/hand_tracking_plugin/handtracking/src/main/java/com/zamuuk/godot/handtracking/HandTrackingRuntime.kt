@@ -7,6 +7,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
@@ -92,7 +93,7 @@ class HandTrackingRuntime(private val plugin: HandTrackingPlugin) {
 
         cameraProvider.unbindAll()
         cameraProvider.bindToLifecycle(
-            activity,
+            ProcessLifecycleOwner.get(),
             CameraSelector.DEFAULT_BACK_CAMERA,
             analysis
         )
