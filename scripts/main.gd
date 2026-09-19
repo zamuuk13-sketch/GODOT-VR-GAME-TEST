@@ -11,12 +11,9 @@ func _ready() -> void:
 			add_child(house)
 			_prepare_house_collisions(house)
 	else:
-		push_warning("modelo não encontrado: " + HOUSE_SCENE + " — coloque casa.glb em res://modelos/.")
+		push_warning("modelo não encontrado: " + HOUSE_SCENE + " — coloque casa.glb em res://modelos.")
 
 func _prepare_house_collisions(root: Node) -> void:
-	# A preparação automática de colisões será refinada quando o GLB real
-	# estiver no repositório. Mantemos o carregamento separado para não
-	# assumir a estrutura interna do modelo.
 	for node in root.find_children("*", "StaticBody3D", true, false):
 		node.collision_layer = 1
 		node.collision_mask = 1
