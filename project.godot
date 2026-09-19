@@ -15,4 +15,6 @@ environment/defaults/default_clear_color=Color(0.03, 0.03, 0.03, 1)
 common/enable_pause_aware_picking=true
 
 [input_devices]
-sensors/enable_sensor=true
+sensors/enable_gyroscope=true
+sensors/enable_accelerometer=true
+sensors/enable_gravity=true
