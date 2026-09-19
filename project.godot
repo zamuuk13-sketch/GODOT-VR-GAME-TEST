@@ -18,3 +18,7 @@ common/enable_pause_aware_picking=true
 sensors/enable_gyroscope=true
 sensors/enable_accelerometer=true
 sensors/enable_gravity=true
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/banano_hand_tracking/plugin.cfg")
