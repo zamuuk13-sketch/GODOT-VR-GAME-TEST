@@ -107,7 +107,7 @@ class HandTrackingRuntime(private val plugin: HandTrackingPlugin) {
         val hands = StringBuilder("[")
         result.landmarks().forEachIndexed { handIndex, landmarks ->
             if (handIndex > 0) hands.append(",")
-            hands.append("{\"hand\":").append(handIndex).append(",\"landmarks\":[")
+            val handedness = result.handednesses().getOrNull(handIndex)?.firstOrNull()?.categoryName() ?: "Unknown"\n            hands.append("{\"hand\":").append(handIndex).append(",\"label\":\"").append(handedness).append("\",\"landmarks\":[")
             landmarks.forEachIndexed { i, point ->
                 if (i > 0) hands.append(",")
                 hands.append("{\"x\":").append(point.x())
