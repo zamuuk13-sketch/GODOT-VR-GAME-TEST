@@ -13,3 +13,6 @@ environment/defaults/default_clear_color=Color(0.03, 0.03, 0.03, 1)
 
 [physics]
 common/enable_pause_aware_picking=true
+
+[input_devices]
+sensors/enable_sensor=true
