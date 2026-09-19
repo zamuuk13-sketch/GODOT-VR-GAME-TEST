@@ -50,3 +50,38 @@ O sistema:
 O mapeamento suporta nomes comuns de ossos como wrist/palm/hand, thumb, index/pointer, middle, ring e pinky/little, com níveis proximal/intermediate/distal ou sufixos numéricos.
 
 A etapa depende de `handvr.glb` ter um `Skeleton3D` com ossos dos dedos. O sistema não cria um esqueleto artificial nem altera a malha do modelo.
+
+
+## Etapa 4 — Mão 3D com tracking procedural
+
+A Etapa 4 usa a arquitetura Tracking Skeleton + Retargeting.
+
+### Sem animações prontas
+
+handvr.glb tem 0 animações. A pose é calculada continuamente pelos 21 landmarks do MediaPipe:
+
+0 wrist
+1-4 thumb
+5-8 index
+9-12 middle
+13-16 ring
+17-20 pinky
+
+Fluxo:
+
+MediaPipe
+→ TrackingHandSkeleton
+→ HandSkeletonMapper
+→ Skeleton3D do handvr.glb
+
+O mapper agora usa os nomes exatos do rig encontrado no GLB, incluindo hand_R_00 e as cadeias thumb/index/middle/ring/pinky.
+
+Duas instâncias independentes do handvr.glb são criadas para esquerda e direita. Cada uma possui seu próprio tracking skeleton e mapper.
+
+Os dedos recebem orientação procedural a partir das direções entre landmarks. A posição do pulso e a orientação da palma também acompanham o tracking. Não há AnimationPlayer nem animações de mão pré-gravadas.
+
+A API de global pose override do Skeleton3D é usada apenas dentro do mapper como ponte de retargeting; ela está isolada para permitir uma futura migração para SkeletonModifier3D.
+
+### Gate
+
+casa.glb e handvr.glb foram verificados no repositório antes da implementação da Etapa 4.
