@@ -13,6 +13,9 @@ signal camera_status_changed(status: String)
 var provider: HandTrackingProvider
 var android_adapter: AndroidHandTrackingAdapter
 var camera_ready := false
+var camera_status := "starting"
+var last_error := ""
+var hand_count := 0
 var _permission_retry := 0.0
 
 func _ready() -> void:
@@ -28,13 +31,16 @@ func _ready() -> void:
 
 	if OS.has_feature("android"):
 		if android_adapter.is_available():
-			camera_status_changed.emit("android_hand_tracking_plugin_ready")
+			camera_status = "android_plugin_ready"
+			camera_status_changed.emit(camera_status)
 			if auto_start_on_android:
 				call_deferred("start_tracking")
 		else:
-			camera_status_changed.emit("android_plugin_not_loaded")
+			camera_status = "android_plugin_not_loaded"
+			camera_status_changed.emit(camera_status)
 	else:
-		camera_status_changed.emit("desktop_no_android_provider")
+		camera_status = "desktop_no_android_provider"
+		camera_status_changed.emit(camera_status)
 
 func _process(delta: float) -> void:
 	if not OS.has_feature("android") or camera_ready:
@@ -48,32 +54,48 @@ func _process(delta: float) -> void:
 		start_tracking()
 
 func start_tracking() -> bool:
-	if android_adapter and android_adapter.is_available():
-		camera_ready = android_adapter.start()
-		if camera_ready:
-			camera_status_changed.emit("rear_camera_tracking_started")
-		else:
-			camera_status_changed.emit("camera_permission_or_runtime_error")
-		return camera_ready
-	camera_status_changed.emit("android_plugin_unavailable")
-	return false
+	if not android_adapter or not android_adapter.is_available():
+		camera_status = "android_plugin_unavailable"
+		camera_status_changed.emit(camera_status)
+		return false
+
+	if not android_adapter.has_camera_permission():
+		android_adapter.request_camera_permission()
+		camera_status = "camera_permission_requested"
+		camera_status_changed.emit(camera_status)
+		return false
+
+	camera_ready = android_adapter.start()
+	camera_status = "rear_camera_tracking_started" if camera_ready else "camera_start_failed"
+	last_error = android_adapter.get_last_error()
+	camera_status_changed.emit(camera_status)
+	return camera_ready
 
 func stop_tracking() -> void:
 	if android_adapter:
 		android_adapter.stop()
 	camera_ready = false
-	camera_status_changed.emit("tracking_stopped")
+	camera_status = "tracking_stopped"
+	camera_status_changed.emit(camera_status)
 
 func _on_tracking_updated(hands: Dictionary) -> void:
+	var list = hands.get("hands", [])
+	hand_count = list.size() if list is Array else 0
 	hand_tracking_updated.emit(hands)
 
 func _on_tracking_fps_changed(fps: float) -> void:
 	tracking_fps_changed.emit(fps)
 
 func get_tracking_fps() -> float:
-	if android_adapter and android_adapter.plugin:
-		return float(android_adapter.plugin.getTrackingFps())
+	if android_adapter:
+		return android_adapter.get_tracking_fps()
 	return 0.0
 
 func is_camera_ready() -> bool:
 	return camera_ready
+
+func get_status() -> String:
+	return camera_status
+
+func get_last_error() -> String:
+	return last_error if last_error != "" else android_adapter.get_last_error() if android_adapter else ""
