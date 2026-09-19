@@ -11,6 +11,7 @@ import org.godotengine.godot.plugin.UsedByGodot
 
 class HandTrackingPlugin(godot: Godot?) : GodotPlugin(godot) {
     private val tracker = HandTrackingRuntime(this)
+    @Volatile private var lastError: String = ""
 
     override fun getPluginName(): String = "BananoHandTracking"
 
@@ -21,6 +22,7 @@ class HandTrackingPlugin(godot: Godot?) : GodotPlugin(godot) {
             ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.CAMERA), 7001)
             return false
         }
+        lastError = ""
         return tracker.start(activity)
     }
 
@@ -37,4 +39,11 @@ class HandTrackingPlugin(godot: Godot?) : GodotPlugin(godot) {
 
     @UsedByGodot
     fun getTrackingFps(): Double = tracker.trackingFps()
+
+    @UsedByGodot
+    fun getLastError(): String = lastError
+
+    fun emitTrackingError(message: String) {
+        lastError = message
+    }
 }
